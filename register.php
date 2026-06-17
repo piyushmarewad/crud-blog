@@ -3,30 +3,56 @@ include 'config.php';
 
 $message = "";
 
-if(isset($_POST['register'])){
+if (isset($_POST['register'])) {
 
     $username = trim($_POST['username']);
-    $password = password_hash($_POST['password'], PASSWORD_DEFAULT);
+    $plainPassword = trim($_POST['password']);
 
-    $check = mysqli_query(
-        $conn,
-        "SELECT * FROM users WHERE username='$username'"
-    );
-
-    if(mysqli_num_rows($check) > 0){
-
-        $message = "Username already exists!";
-
+    // Server-side validation
+    if (strlen($username) < 3) {
+        $message = "Username must be at least 3 characters long.";
+    } elseif (strlen($plainPassword) < 6) {
+        $message = "Password must be at least 6 characters long.";
     } else {
 
-        $sql = "INSERT INTO users(username, password)
-                VALUES('$username','$password')";
+        // Check if username already exists
+        $checkSql = "SELECT id FROM users WHERE username = ?";
+        $checkStmt = mysqli_prepare($conn, $checkSql);
 
-        if(mysqli_query($conn, $sql)){
-            $message = "Registration Successful!";
+        mysqli_stmt_bind_param($checkStmt, "s", $username);
+        mysqli_stmt_execute($checkStmt);
+
+        $checkResult = mysqli_stmt_get_result($checkStmt);
+
+        if (mysqli_num_rows($checkResult) > 0) {
+
+            $message = "Username already exists!";
+
         } else {
-            $message = "Registration Failed!";
+
+            $hashedPassword = password_hash($plainPassword, PASSWORD_DEFAULT);
+
+            // Insert new user with default role = editor
+            $insertSql = "INSERT INTO users (username, password, role) VALUES (?, ?, 'editor')";
+            $insertStmt = mysqli_prepare($conn, $insertSql);
+
+            mysqli_stmt_bind_param(
+                $insertStmt,
+                "ss",
+                $username,
+                $hashedPassword
+            );
+
+            if (mysqli_stmt_execute($insertStmt)) {
+                $message = "Registration Successful! You can now login.";
+            } else {
+                $message = "Registration Failed!";
+            }
+
+            mysqli_stmt_close($insertStmt);
         }
+
+        mysqli_stmt_close($checkStmt);
     }
 }
 ?>
@@ -36,7 +62,7 @@ if(isset($_POST['register'])){
 
 <head>
 
-    <title>Register</title>
+    <title>User Registration</title>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 
@@ -46,13 +72,13 @@ if(isset($_POST['register'])){
 
 <body>
 
-<div class="container">
+<div class="container mt-5">
 
     <div class="row justify-content-center">
 
         <div class="col-md-5">
 
-            <div class="card mt-5">
+            <div class="card shadow">
 
                 <div class="card-body">
 
@@ -60,17 +86,13 @@ if(isset($_POST['register'])){
                         User Registration
                     </h2>
 
-                    <?php
-                    if(!empty($message)){
-                    ?>
+                    <?php if (!empty($message)) { ?>
 
                         <div class="alert alert-info">
-                            <?php echo $message; ?>
+                            <?php echo htmlspecialchars($message); ?>
                         </div>
 
-                    <?php
-                    }
-                    ?>
+                    <?php } ?>
 
                     <form method="POST">
 
@@ -85,6 +107,7 @@ if(isset($_POST['register'])){
                                 name="username"
                                 class="form-control"
                                 placeholder="Enter Username"
+                                minlength="3"
                                 required
                             >
 
@@ -101,6 +124,7 @@ if(isset($_POST['register'])){
                                 name="password"
                                 class="form-control"
                                 placeholder="Enter Password"
+                                minlength="6"
                                 required
                             >
 

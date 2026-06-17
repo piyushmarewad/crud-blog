@@ -3,22 +3,48 @@ include 'config.php';
 
 $message = "";
 
-if(isset($_POST['submit'])){
+if (isset($_POST['submit'])) {
 
     $title = trim($_POST['title']);
     $content = trim($_POST['content']);
 
-    $sql = "INSERT INTO posts(title, content)
-            VALUES('$title','$content')";
+    // Server-side validation
+    if (strlen($title) < 3) {
 
-    if(mysqli_query($conn, $sql)){
+        $message = "Post title must be at least 3 characters long.";
 
-        header("Location: index.php");
-        exit();
+    } elseif (strlen($content) < 10) {
+
+        $message = "Post content must be at least 10 characters long.";
 
     } else {
 
-        $message = "Failed to create post!";
+        // Prepared Statement
+        $sql = "INSERT INTO posts (title, content) VALUES (?, ?)";
+
+        $stmt = mysqli_prepare($conn, $sql);
+
+        mysqli_stmt_bind_param(
+            $stmt,
+            "ss",
+            $title,
+            $content
+        );
+
+        if (mysqli_stmt_execute($stmt)) {
+
+            mysqli_stmt_close($stmt);
+
+            header("Location: index.php");
+            exit();
+
+        } else {
+
+            $message = "Failed to create post.";
+
+        }
+
+        mysqli_stmt_close($stmt);
     }
 }
 ?>
@@ -38,13 +64,13 @@ if(isset($_POST['submit'])){
 
 <body>
 
-<div class="container">
+<div class="container mt-5">
 
     <div class="row justify-content-center">
 
         <div class="col-md-8">
 
-            <div class="card mt-5">
+            <div class="card shadow">
 
                 <div class="card-body">
 
@@ -52,10 +78,10 @@ if(isset($_POST['submit'])){
                         Create New Post
                     </h2>
 
-                    <?php if(!empty($message)){ ?>
+                    <?php if (!empty($message)) { ?>
 
                         <div class="alert alert-danger">
-                            <?php echo $message; ?>
+                            <?php echo htmlspecialchars($message); ?>
                         </div>
 
                     <?php } ?>
@@ -73,6 +99,7 @@ if(isset($_POST['submit'])){
                                 name="title"
                                 class="form-control"
                                 placeholder="Enter Post Title"
+                                minlength="3"
                                 required
                             >
 
@@ -89,6 +116,7 @@ if(isset($_POST['submit'])){
                                 class="form-control"
                                 rows="6"
                                 placeholder="Enter Post Content"
+                                minlength="10"
                                 required
                             ></textarea>
 

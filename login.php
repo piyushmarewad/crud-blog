@@ -4,24 +4,36 @@ include 'config.php';
 
 $message = "";
 
-if(isset($_POST['login'])){
+if (isset($_POST['login'])) {
 
-    $username = $_POST['username'];
-    $password = $_POST['password'];
+    $username = trim($_POST['username']);
+    $password = trim($_POST['password']);
 
-    $sql = "SELECT * FROM users WHERE username='$username'";
-    $result = mysqli_query($conn, $sql);
+    // Prepared statement
+    $sql = "SELECT * FROM users WHERE username = ?";
+
+    $stmt = mysqli_prepare($conn, $sql);
+
+    mysqli_stmt_bind_param($stmt, "s", $username);
+
+    mysqli_stmt_execute($stmt);
+
+    $result = mysqli_stmt_get_result($stmt);
 
     $user = mysqli_fetch_assoc($result);
 
-    if($user && password_verify($password, $user['password'])){
+    mysqli_stmt_close($stmt);
 
-        $_SESSION['username'] = $username;
+    if ($user && password_verify($password, $user['password'])) {
+
+        $_SESSION['username'] = $user['username'];
+        $_SESSION['role'] = $user['role'];
 
         header("Location: dashboard.php");
         exit();
-    }
-    else{
+
+    } else {
+
         $message = "Invalid Username or Password!";
     }
 }
@@ -42,13 +54,13 @@ if(isset($_POST['login'])){
 
 <body>
 
-<div class="container">
+<div class="container mt-5">
 
     <div class="row justify-content-center">
 
         <div class="col-md-5">
 
-            <div class="card mt-5">
+            <div class="card shadow">
 
                 <div class="card-body">
 
@@ -56,10 +68,10 @@ if(isset($_POST['login'])){
                         User Login
                     </h2>
 
-                    <?php if(!empty($message)){ ?>
+                    <?php if (!empty($message)) { ?>
 
                         <div class="alert alert-danger">
-                            <?php echo $message; ?>
+                            <?php echo htmlspecialchars($message); ?>
                         </div>
 
                     <?php } ?>

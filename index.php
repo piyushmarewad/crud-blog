@@ -1,43 +1,59 @@
 <?php
+session_start();
 include 'config.php';
 
-$limit = 5;
+$role = isset($_SESSION['role']) ? $_SESSION['role'] : "editor";
 
+$limit = 5;
 $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
 $start = ($page - 1) * $limit;
 
 $search = "";
 
-if(isset($_GET['search']) && !empty($_GET['search'])){
+if (isset($_GET['search']) && !empty(trim($_GET['search']))) {
 
-    $search = mysqli_real_escape_string($conn, $_GET['search']);
+    $search = trim($_GET['search']);
+    $searchParam = "%" . $search . "%";
+
+    // Get matching posts
+    $sql = "SELECT * FROM posts
+            WHERE title LIKE ? OR content LIKE ?
+            ORDER BY created_at DESC
+            LIMIT ?, ?";
+
+    $stmt = mysqli_prepare($conn, $sql);
+    mysqli_stmt_bind_param($stmt, "ssii", $searchParam, $searchParam, $start, $limit);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+
+    // Count matching posts
+    $countSql = "SELECT COUNT(*) AS total
+                 FROM posts
+                 WHERE title LIKE ? OR content LIKE ?";
+
+    $countStmt = mysqli_prepare($conn, $countSql);
+    mysqli_stmt_bind_param($countStmt, "ss", $searchParam, $searchParam);
+    mysqli_stmt_execute($countStmt);
+    $countResult = mysqli_stmt_get_result($countStmt);
+    $countRow = mysqli_fetch_assoc($countResult);
+
+} else {
 
     $sql = "SELECT * FROM posts
-            WHERE title LIKE '%$search%'
-            OR content LIKE '%$search%'
             ORDER BY created_at DESC
-            LIMIT $start, $limit";
+            LIMIT ?, ?";
 
-    $count_sql = "SELECT COUNT(*) AS total
-                  FROM posts
-                  WHERE title LIKE '%$search%'
-                  OR content LIKE '%$search%'";
-}
-else{
+    $stmt = mysqli_prepare($conn, $sql);
+    mysqli_stmt_bind_param($stmt, "ii", $start, $limit);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
 
-    $sql = "SELECT * FROM posts
-            ORDER BY created_at DESC
-            LIMIT $start, $limit";
-
-    $count_sql = "SELECT COUNT(*) AS total FROM posts";
+    $countSql = "SELECT COUNT(*) AS total FROM posts";
+    $countResult = mysqli_query($conn, $countSql);
+    $countRow = mysqli_fetch_assoc($countResult);
 }
 
-$result = mysqli_query($conn, $sql);
-
-$count_result = mysqli_query($conn, $count_sql);
-$count_row = mysqli_fetch_assoc($count_result);
-
-$total_posts = $count_row['total'];
+$total_posts = $countRow['total'];
 $total_pages = ceil($total_posts / $limit);
 ?>
 
@@ -45,29 +61,22 @@ $total_pages = ceil($total_posts / $limit);
 <html>
 
 <head>
-
     <title>CRUD Blog</title>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-
     <link rel="stylesheet" href="style.css">
-
 </head>
 
 <body>
 
-<div class="container">
+<div class="container mt-4">
 
-    <h1 class="mb-4 text-center">CRUD Blog Application</h1>
+    <h1 class="text-center mb-4">CRUD Blog Application</h1>
 
     <div class="mb-3">
-        <a href="create.php" class="btn btn-success">
-            Create New Post
-        </a>
-
-        <a href="dashboard.php" class="btn btn-primary">
-            Dashboard
-        </a>
+        <a href="create.php" class="btn btn-success">Create New Post</a>
+        <a href="dashboard.php" class="btn btn-primary">Dashboard</a>
+        <a href="logout.php" class="btn btn-danger">Logout</a>
     </div>
 
     <form method="GET" class="mb-4">
@@ -90,63 +99,66 @@ $total_pages = ceil($total_posts / $limit);
 
     </form>
 
-    <?php
-    if(mysqli_num_rows($result) > 0){
+    <?php if (mysqli_num_rows($result) > 0) { ?>
 
-        while($row = mysqli_fetch_assoc($result)){
-    ?>
+        <?php while ($row = mysqli_fetch_assoc($result)) { ?>
 
-        <div class="card">
+            <div class="card mb-3">
 
-            <div class="card-body">
+                <div class="card-body">
 
-                <h3>
-                    <?php echo htmlspecialchars($row['title']); ?>
-                </h3>
+                    <h3>
+                        <?php echo htmlspecialchars($row['title']); ?>
+                    </h3>
 
-                <p>
-                    <?php echo nl2br(htmlspecialchars($row['content'])); ?>
-                </p>
+                    <p>
+                        <?php echo nl2br(htmlspecialchars($row['content'])); ?>
+                    </p>
 
-                <small class="text-muted">
-                    <?php echo $row['created_at']; ?>
-                </small>
+                    <small class="text-muted">
+                        <?php echo htmlspecialchars($row['created_at']); ?>
+                    </small>
 
-                <br><br>
+                    <br><br>
 
-                <a
-                    href="edit.php?id=<?php echo $row['id']; ?>"
-                    class="btn btn-warning"
-                >
-                    Edit
-                </a>
+                    <a
+                        href="edit.php?id=<?php echo $row['id']; ?>"
+                        class="btn btn-warning"
+                    >
+                        Edit
+                    </a>
 
-                <a
-                    href="delete.php?id=<?php echo $row['id']; ?>"
-                    class="btn btn-danger"
-                    onclick="return confirm('Are you sure you want to delete this post?');"
-                >
-                    Delete
-                </a>
+                    <?php if ($role == "admin") { ?>
+
+                        <a
+                            href="delete.php?id=<?php echo $row['id']; ?>"
+                            class="btn btn-danger"
+                            onclick="return confirm('Are you sure you want to delete this post?');"
+                        >
+                            Delete
+                        </a>
+
+                    <?php } ?>
+
+                </div>
 
             </div>
 
+        <?php } ?>
+
+    <?php } else { ?>
+
+        <div class="alert alert-info">
+            No posts found.
         </div>
 
-    <?php
-        }
-    } else {
-        echo "<div class='alert alert-info'>No posts found.</div>";
-    }
-    ?>
+    <?php } ?>
 
     <nav>
 
         <ul class="pagination">
 
-            <?php
-            for($i = 1; $i <= $total_pages; $i++){
-            ?>
+            <?php for ($i = 1; $i <= $total_pages; $i++) { ?>
 
                 <li class="page-item">
 
@@ -159,9 +171,7 @@ $total_pages = ceil($total_posts / $limit);
 
                 </li>
 
-            <?php
-            }
-            ?>
+            <?php } ?>
 
         </ul>
 
@@ -170,5 +180,4 @@ $total_pages = ceil($total_posts / $limit);
 </div>
 
 </body>
-
 </html>
