@@ -9,10 +9,14 @@ if (isset($_POST['register'])) {
     $plainPassword = trim($_POST['password']);
 
     // Server-side validation
-    if (strlen($username) < 3) {
-        $message = "Username must be at least 3 characters long.";
+    if (!preg_match('/^[a-zA-Z0-9_]{3,20}$/', $username)) {
+
+        $message = "Username must be 3-20 characters long and contain only letters, numbers, and underscores.";
+
     } elseif (strlen($plainPassword) < 6) {
+
         $message = "Password must be at least 6 characters long.";
+
     } else {
 
         // Check if username already exists
@@ -26,13 +30,13 @@ if (isset($_POST['register'])) {
 
         if (mysqli_num_rows($checkResult) > 0) {
 
-            $message = "Username already exists!";
+            $message = "Username already exists.";
 
         } else {
 
             $hashedPassword = password_hash($plainPassword, PASSWORD_DEFAULT);
 
-            // Insert new user with default role = editor
+            // Insert user
             $insertSql = "INSERT INTO users (username, password, role) VALUES (?, ?, 'editor')";
             $insertStmt = mysqli_prepare($conn, $insertSql);
 
@@ -44,9 +48,13 @@ if (isset($_POST['register'])) {
             );
 
             if (mysqli_stmt_execute($insertStmt)) {
-                $message = "Registration Successful! You can now login.";
+
+                $message = "Registration Successful!";
+
             } else {
-                $message = "Registration Failed!";
+
+                $message = "Registration Failed.";
+
             }
 
             mysqli_stmt_close($insertStmt);
@@ -107,9 +115,15 @@ if (isset($_POST['register'])) {
                                 name="username"
                                 class="form-control"
                                 placeholder="Enter Username"
+                                pattern="[A-Za-z0-9_]{3,20}"
                                 minlength="3"
+                                maxlength="20"
                                 required
                             >
+
+                            <small class="text-muted">
+                                Only letters, numbers and underscores are allowed.
+                            </small>
 
                         </div>
 
